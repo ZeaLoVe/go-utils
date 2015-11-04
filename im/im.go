@@ -1,11 +1,11 @@
 package im
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
 )
 
 type Acount struct {
@@ -50,7 +50,7 @@ func getToken(acount *Acount) (*UCToken, error) {
 		return nil, err
 	}
 	//	fmt.Println(string(data))
-	req, _ := http.NewRequest("POST", "http://im-agent.web.sdp.101.com/v0.2/api/agents/users/tokens", strings.NewReader(string(data)))
+	req, _ := http.NewRequest("POST", "http://im-agent.web.sdp.101.com/v0.2/api/agents/users/tokens", bytes.NewBuffer(data))
 	req.Header.Set("Content-Type", "application/json")
 	client := http.DefaultClient
 	resp, err := client.Do(req)
@@ -87,10 +87,8 @@ func getIMApi(tos []string, msg string) []byte {
 
 func SendMsg(token *UCToken, tos []string, msg string) error {
 	auth := fmt.Sprintf("MAC id=\"%s\",nonce=\"%s\",mac=\"%s\"", token.AccessToken, token.Nonce, token.Mac)
-	data := string(getIMApi(tos, msg))
-	fmt.Println(auth)
-	fmt.Println(data)
-	req, _ := http.NewRequest("POST", "http://im-agent.web.sdp.101.com/v0.2/api/agents/messages", strings.NewReader(data))
+	data := bytes.NewBuffer(getIMApi(tos, msg))
+	req, _ := http.NewRequest("POST", "http://im-agent.web.sdp.101.com/v0.2/api/agents/messages", data)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Language", "zh-CN")
 	req.Header.Set("Authorization", auth)
@@ -106,7 +104,6 @@ func SendMsg(token *UCToken, tos []string, msg string) error {
 		return err
 	}
 	err = json.Unmarshal(body, &msgResp)
-	fmt.Println(msgResp.Msg_id)
 	if msgResp.Msg_id != "" {
 		return nil
 	} else {
