@@ -6,6 +6,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
+)
+
+var TokenValidInterval int64 = 1700
+
+var (
+	IMBASEURL     = "http://im-agent.web.sdp.101.com"
+	IMTOKENPATH   = "/v0.2/api/agents/users/tokens"
+	IMMESSAGEPATH = "/v0.2/api/agents/messages"
 )
 
 type Acount struct {
@@ -44,13 +53,25 @@ type MsgResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-func getToken(acount *Acount) (*UCToken, error) {
-	data, err := json.Marshal(&acount)
-	if err != nil {
-		return nil, err
+type IM99U struct {
+	ac         *Acount
+	token      *UCToken
+	lastupdate int64
+}
+
+func (this *IM99U) SetAcount(acount *Acount) {
+	this.ac = acount
+}
+
+func (this *IM99U) getToken() error {
+	if this.ac == nil {
+		fmt.Errorf("uc acount not set")
 	}
-	//	fmt.Println(string(data))
-	req, _ := http.NewRequest("POST", "http://im-agent.web.sdp.101.com/v0.2/api/agents/users/tokens", bytes.NewBuffer(data))
+	data, err := json.Marshal(this.ac)
+	if err != nil {
+		return err
+	}
+	req, _ := http.NewRequest("POST", IMBASEURL+IMTOKENPATH, bytes.NewBuffer(data))
 	req.Header.Set("Content-Type", "application/json")
 	client := http.DefaultClient
 	resp, err := client.Do(req)
@@ -58,18 +79,20 @@ func getToken(acount *Acount) (*UCToken, error) {
 	token := new(UCToken)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	err = json.Unmarshal(body, &token)
 	//	fmt.Println(string(body))
 	if err != nil {
-		return nil, err
+		return err
 	} else {
-		return token, nil
+		this.token = token
+		this.lastupdate = time.Now().Unix()
+		return nil
 	}
 }
 
-func getIMApi(tos []string, msg string) []byte {
+func getIMData(tos []string, msg string) []byte {
 	var list IMList
 	var body IMBody
 	var args IMArgs
@@ -85,10 +108,17 @@ func getIMApi(tos []string, msg string) []byte {
 	return data
 }
 
-func SendMsg(token *UCToken, tos []string, msg string) error {
-	auth := fmt.Sprintf("MAC id=\"%s\",nonce=\"%s\",mac=\"%s\"", token.AccessToken, token.Nonce, token.Mac)
-	data := bytes.NewBuffer(getIMApi(tos, msg))
-	req, _ := http.NewRequest("POST", "http://im-agent.web.sdp.101.com/v0.2/api/agents/messages", data)
+func (this *IM99U) SendMsg(tos []string, msg string) error {
+	if time.Now().Unix()-this.lastupdate > TokenValidInterval {
+		fmt.Println("Get token called")
+		err := this.getToken()
+		if err != nil {
+			return fmt.Errorf("Get UC Token fail.with error %s", err.Error())
+		}
+	}
+	auth := fmt.Sprintf("MAC id=\"%s\",nonce=\"%s\",mac=\"%s\"", this.token.AccessToken, this.token.Nonce, this.token.Mac)
+	data := bytes.NewBuffer(getIMData(tos, msg))
+	req, _ := http.NewRequest("POST", IMBASEURL+IMMESSAGEPATH, data)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Language", "zh-CN")
 	req.Header.Set("Authorization", auth)
@@ -99,7 +129,7 @@ func SendMsg(token *UCToken, tos []string, msg string) error {
 	}
 	var msgResp MsgResponse
 	body, err := ioutil.ReadAll(resp.Body)
-	fmt.Println(string(body))
+	//	fmt.Println(string(body))
 	if err != nil {
 		return err
 	}
