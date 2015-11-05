@@ -1,5 +1,20 @@
 package nexmo
 
+/**
+usage:
+	var nexmo Nexmo
+	nexmo.SetKeyAndSecret("your_key", "your_secret")
+	nexmo.SetVoiceMsg("your-words")
+	nexmo.SetTo("86***********") //your-phone-number ,86 for china
+	nexmo.SetRepeat("2") //repeat-times
+	nexmo.SetLanguage("zh-cn") //default en-us
+	//	nexmo.SetGender("male") //default femail
+
+	err := nexmo.Call()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+**/
 import (
 	"bytes"
 	"encoding/json"
@@ -9,7 +24,7 @@ import (
 	"net/url"
 )
 
-const (
+var (
 	NexmoURL = "https://api.nexmo.com"
 	VoiceURL = "/tts/json"
 )
@@ -25,6 +40,7 @@ type Nexmo struct {
 	From        string
 	To          string
 	VoiceMsg    string
+	Status_url  string
 	resp        NexmoResponse
 }
 
@@ -78,6 +94,10 @@ func (this *Nexmo) Call() error {
 	params.Add("api_secret", this.api_secret)
 	params.Add("to", this.To)
 	params.Add("text", this.VoiceMsg)
+	if this.Status_url != "" {
+		params.Add("status_url", this.Status_url)
+		params.Add("status_method", "GET")
+	}
 
 	//see https://docs.nexmo.com/api-ref/voice-api/supported-languages  for details
 	//zh-cn for Chinese

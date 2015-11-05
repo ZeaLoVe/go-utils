@@ -1,5 +1,22 @@
 package im
 
+/**usage
+	ac := Acount{
+		Uri:      "*********",
+		Password: "*********",
+	}
+
+	var sender IM99U
+	sender.SetAcount(&ac)
+
+	var tos []string
+	tos = append(tos, "*****")
+	err := sender.SendMsg(tos, "a simple test of 99u")
+	if err != nil {
+		fmt.Printf("%s", err.Error())
+	}
+**/
+
 import (
 	"bytes"
 	"encoding/json"
@@ -110,7 +127,6 @@ func getIMData(tos []string, msg string) []byte {
 
 func (this *IM99U) SendMsg(tos []string, msg string) error {
 	if time.Now().Unix()-this.lastupdate > TokenValidInterval {
-		fmt.Println("Get token called")
 		err := this.getToken()
 		if err != nil {
 			return fmt.Errorf("Get UC Token fail.with error %s", err.Error())
