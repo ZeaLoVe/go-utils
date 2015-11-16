@@ -16,7 +16,6 @@ usage:
 	}
 **/
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -49,18 +48,13 @@ type NexmoResponse struct {
 	Error_text string `json:"error_text"`
 }
 
-func ToString(words ...string) string {
-	res := bytes.Buffer{}
-	for _, word := range words {
-		res.WriteString(word + "+")
-	}
-	res.WriteString("over")
-	return res.String()
-}
-
 func (this *Nexmo) SetKeyAndSecret(key, secret string) {
 	this.api_key = key
 	this.api_secret = secret
+}
+
+func (this *Nexmo) SetToChinaZoneCode(to string) {
+	this.To = "86" + to
 }
 
 func (this *Nexmo) SetTo(to string) {
@@ -95,8 +89,7 @@ func (this *Nexmo) Call() error {
 	params.Add("to", this.To)
 	params.Add("text", this.VoiceMsg)
 	if this.Status_url != "" {
-		params.Add("status_url", this.Status_url)
-		params.Add("status_method", "GET")
+		params.Add("callback", this.Status_url)
 	}
 
 	//see https://docs.nexmo.com/api-ref/voice-api/supported-languages  for details
@@ -113,7 +106,6 @@ func (this *Nexmo) Call() error {
 
 	reqURL.RawQuery = params.Encode()
 
-	fmt.Println(reqURL.String())
 	resp, err := http.Get(reqURL.String())
 
 	if err != nil {
@@ -122,11 +114,11 @@ func (this *Nexmo) Call() error {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
+	//	fmt.Println(string(body))
+
 	if err != nil {
 		return fmt.Errorf("Get response error with %s", err.Error())
 	}
-
-	fmt.Println(string(body))
 
 	json.Unmarshal(body, &this.resp)
 
