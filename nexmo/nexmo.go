@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sync"
 )
 
 var (
@@ -29,6 +30,7 @@ var (
 )
 
 type Nexmo struct {
+	sync.Mutex
 	Url        string
 	api_key    string
 	api_secret string
@@ -40,10 +42,12 @@ type Nexmo struct {
 	To          string
 	VoiceMsg    string
 	Status_url  string
-	resp        NexmoResponse
+	Resp        NexmoResponse
 }
 
 type NexmoResponse struct {
+	To         string `json:"to"`
+	Call_id    string `json:"call_id"`
 	Status     int    `json:"status"`
 	Error_text string `json:"error_text"`
 }
@@ -77,10 +81,16 @@ func (this *Nexmo) SetVoiceMsg(msg string) {
 	this.VoiceMsg = msg
 }
 
-func (this *Nexmo) Call() error {
+func (this *Nexmo) SetCallBack(status_url string) {
+	this.Status_url = status_url
+}
+
+func (this *Nexmo) Call() (error, NexmoResponse) {
 	if this.api_key == "" || this.api_secret == "" || this.To == "" || this.VoiceMsg == "" {
-		return fmt.Errorf("something needed is not set")
+		return fmt.Errorf("something need is missing"), NexmoResponse{}
 	}
+	this.Lock()
+	defer this.Unlock()
 	params := url.Values{}
 	reqURL, err := url.Parse(NexmoURL + VoiceURL)
 
@@ -109,7 +119,7 @@ func (this *Nexmo) Call() error {
 	resp, err := http.Get(reqURL.String())
 
 	if err != nil {
-		return fmt.Errorf("Get request error with %s", err.Error())
+		return fmt.Errorf("Get request error with %s", err.Error()), NexmoResponse{}
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -117,15 +127,15 @@ func (this *Nexmo) Call() error {
 	//	fmt.Println(string(body))
 
 	if err != nil {
-		return fmt.Errorf("Get response error with %s", err.Error())
+		return fmt.Errorf("Get response error with %s", err.Error()), NexmoResponse{}
 	}
 
-	json.Unmarshal(body, &this.resp)
+	json.Unmarshal(body, &this.Resp)
 
-	if this.resp.Status != 0 {
-		return fmt.Errorf("Response status is %d, error_text:%s", this.resp.Status, this.resp.Error_text)
+	if this.Resp.Status != 0 {
+		return fmt.Errorf("Response status is %d, error_text:%s", this.Resp.Status, this.Resp.Error_text), this.Resp
 	} else {
-		return nil
+		return nil, this.Resp
 	}
 
 }

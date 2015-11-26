@@ -17,7 +17,7 @@ type Mail struct {
 
 func (this *Mail) String() string {
 	return fmt.Sprintf(
-		"To: %s\r\nSubject: %s\r\n\r\n%s\r\r",
+		"To: %s\r\nSubject: %s\r\nContent-Type: text/plain;charset=UTF-8\r\n\r\n%s\r\r",
 		this.Tos,
 		this.Subject,
 		this.Content,
@@ -37,7 +37,7 @@ type SmtpMailSender struct {
 }
 
 func (this *SmtpMailSender) SetMailAcount(acount *MailAcount) error {
-	if acount == nil || acount.Password == "" || acount.User == "" || acount.Password == "" {
+	if acount == nil || acount.Password == "" || acount.User == "" || acount.Server == "" {
 		return fmt.Errorf("set acount error")
 	}
 	this.lock = &sync.Mutex{}
@@ -49,9 +49,14 @@ func (this *SmtpMailSender) SetMailAcount(acount *MailAcount) error {
 func (this *SmtpMailSender) SendMail(mail *Mail) error {
 	this.lock.Lock()
 	defer this.lock.Unlock()
+	if this.auth == nil {
+		return fmt.Errorf("auth not corret")
+	}
+	if mail.Tos == "" || mail.Content == "" || mail.Subject == "" {
+		return fmt.Errorf("mail infomation lack")
+	}
 	err := smtp.SendMail(this.ac.Server+SMTPPORTSTRING, this.auth, this.ac.User, strings.Split(mail.Tos, ","), []byte(mail.String()))
 	if err != nil {
-		//		fmt.Println(err)
 		return err
 	}
 	return nil

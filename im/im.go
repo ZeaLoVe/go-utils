@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -51,13 +52,17 @@ type IMapi struct {
 	Body   IMBody   `json:"body"`
 }
 
-type IMList struct {
+type URIList struct {
 	UriList []string `json:"uri_list"`
 }
 
+type GidList struct {
+	GidList []string `json:"gid"`
+}
+
 type IMArgs struct {
-	Name string `json:"name"`
-	Args IMList `json:"args"`
+	Name string      `json:"name"`
+	Args interface{} `json:"args,omitempty"`
 }
 
 type IMBody struct {
@@ -71,6 +76,7 @@ type MsgResponse struct {
 }
 
 type IM99U struct {
+	sync.Mutex
 	ac         *Acount
 	token      *UCToken
 	lastupdate int64
@@ -88,6 +94,8 @@ func (this *IM99U) getToken() error {
 	if err != nil {
 		return err
 	}
+	this.Lock()
+	defer this.Unlock()
 	req, _ := http.NewRequest("POST", IMBASEURL+IMTOKENPATH, bytes.NewBuffer(data))
 	req.Header.Set("Content-Type", "application/json")
 	client := http.DefaultClient
@@ -110,13 +118,23 @@ func (this *IM99U) getToken() error {
 }
 
 func getIMData(tos []string, msg string) []byte {
-	var list IMList
+	//根据第一个目标编号的长度判断，如果大于6位认为是群，则调用群API。小于等于6位认为是用户UID，调用个人的API
 	var body IMBody
 	var args IMArgs
 	var api IMapi
-	list.UriList = tos
-	args.Name = "uri"
-	args.Args = list
+
+	if len(tos[0]) <= 6 {
+		var list URIList
+		args.Name = "uri"
+		list.UriList = tos
+		args.Args = list
+	}
+	if len(tos[0]) > 6 {
+		var list GidList
+		args.Name = "gid"
+		list.GidList = tos
+		args.Args = list
+	}
 	body.Content = "Content-Type:text/plain\r\n\r\n" + msg
 	body.Flag = 0
 	api.Body = body
@@ -126,20 +144,58 @@ func getIMData(tos []string, msg string) []byte {
 }
 
 func (this *IM99U) SendMsg(tos []string, msg string) error {
+	var Users []string
+	var Groups []string
+	var err [2]error
+
+	for _, id := range tos {
+		if len(id) <= 6 {
+			//去除空的成员
+			if len(id) == 0 {
+				continue
+			}
+			Users = append(Users, id)
+		} else {
+			Groups = append(Groups, id)
+		}
+	}
+	if len(Users) != 0 {
+		err[0] = this.send(Users, msg)
+	}
+	if len(Groups) != 0 {
+		err[1] = this.send(Groups, msg)
+	}
+	if err[0] == nil && err[1] == nil {
+		return nil
+	} else {
+		return fmt.Errorf("send msg error ,group user error:%s group error:%s", err[0], err[1])
+	}
+}
+
+func (this *IM99U) send(tos []string, msg string) error {
+	if len(tos) == 0 || (len(tos) == 1 && tos[0] == "") {
+		return fmt.Errorf("tos is empty")
+	}
+	if msg == "" {
+		return fmt.Errorf("msg is empty")
+	}
 	if time.Now().Unix()-this.lastupdate > TokenValidInterval {
 		err := this.getToken()
 		if err != nil {
 			return fmt.Errorf("Get UC Token fail.with error %s", err.Error())
 		}
 	}
+	this.Lock()
+	defer this.Unlock()
+
 	auth := fmt.Sprintf("MAC id=\"%s\",nonce=\"%s\",mac=\"%s\"", this.token.AccessToken, this.token.Nonce, this.token.Mac)
 	data := bytes.NewBuffer(getIMData(tos, msg))
 	req, _ := http.NewRequest("POST", IMBASEURL+IMMESSAGEPATH, data)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Language", "zh-CN")
 	req.Header.Set("Authorization", auth)
-	client := http.DefaultClient
-	resp, err := client.Do(req)
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
