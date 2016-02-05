@@ -72,6 +72,7 @@ type IMBody struct {
 
 type MsgResponse struct {
 	Msg_id  string `json:"msg_id,omitempty"`
+	Task_id string `json:"task_id,omitempty"`
 	Message string `json:"message,omitempty"`
 }
 
@@ -206,7 +207,7 @@ func (this *IM99U) send(tos []string, msg string) error {
 		return err
 	}
 	err = json.Unmarshal(body, &msgResp)
-	if msgResp.Msg_id != "" {
+	if msgResp.Msg_id != "" || msgResp.Task_id != "" {
 		return nil
 	} else {
 		return fmt.Errorf("Get message:%s", msgResp.Message)
