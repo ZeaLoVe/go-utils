@@ -101,6 +101,9 @@ func (this *IM99U) getToken() error {
 	req.Header.Set("Content-Type", "application/json")
 	client := http.DefaultClient
 	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
 
 	token := new(UCToken)
 	body, err := ioutil.ReadAll(resp.Body)
