@@ -17,6 +17,12 @@ type IMSms struct {
 	Content string `json:"content"`
 }
 
+//Wechat sms,Tos is wechat user name
+type WechatSms struct {
+	Tos     string `json:"tos"`
+	Content string `json:"content"`
+}
+
 //phone message,Tos means phone number
 type Phone struct {
 	Tos     string `json:"tos"`
